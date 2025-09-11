@@ -24,6 +24,8 @@ COPY pyproject.toml uv.lock* /src/ /config/
 RUN /usr/local/uv/bin/uv sync --no-editable
 
 COPY . /src
+# COPY config/ ./config/
+
 
 RUN uv pip install -r pyproject.toml
 
