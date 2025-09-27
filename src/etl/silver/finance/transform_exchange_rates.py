@@ -9,10 +9,11 @@ class Transform(PolarsProcessor):
     def __init__(self):
         super().__init__()
 
-    def load_data(self):
-        today = datetime.now().date().today()
-        source_path = f"data/raw/api/exchange_rates/exchange_rates_{today}.json"
+    def get_table(self, path):
+        lazy_df = pl.read_json(path).lazy()
+        return lazy_df
 
+    def transformations(self, lazy_df):
         # Define as colunas que servirão de identificadores (não serão pivotadas)
         index_cols = [
             "result",
@@ -27,7 +28,7 @@ class Transform(PolarsProcessor):
 
         # 1. Inicia uma varredura "lazy" do arquivo JSON com pl.scan_json
         lazy_df = (
-            pl.read_json(source_path).lazy()
+            lazy_df
             
             # 2. Desaninha (unnest) a coluna struct "conversion_rates" de forma automática
             .with_columns(pl.col("conversion_rates").struct.unnest())
@@ -49,23 +50,24 @@ class Transform(PolarsProcessor):
             .filter(pl.col("exchange_rate").is_not_null())
         )
         lazy_df = lazy_df.with_columns(pl.lit("api").alias("type_src"))
-        sink_path = f"data/silver/finance/exchange_rates/part-{int(time()*1000)}.parquet"
+        return lazy_df
 
+    def write_data(self, lazy_df):
+        sink_path = f"data/silver/finance/exchange_rates/part-{int(time()*1000)}.parquet"
         self.polars_read_parquet()
         self.polars_write_parquet()
-
         lazy_df.sink_parquet(sink_path, compression="snappy", mkdir=True)
 
-    def transform_data(self):
-        print("Transform Data.")
-
     def execute(self):
-        self.load_data()
+        today = datetime.now().date().today()
+        source_path = f"data/raw/api/exchange_rates/exchange_rates_{today}.json"
+        lazy_df = self.get_table(source_path)
+        silver_df = self.transformations(lazy_df)
+        self.write_data(silver_df)
 
 
 if __name__ == "__main__":
     time_a = time()
-
     tranform_exchange_rates = Transform()
-    tranform_exchange_rates.load_data()
+    tranform_exchange_rates.execute()
     print(time() - time_a)
