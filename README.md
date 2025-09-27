@@ -17,3 +17,8 @@ rodei para testar: docker run pipeline-cotacoes:latest
 executando o shell do container e usando o dado do repositório..
 
 sudo docker run -it --rm -v $(pwd)/data:/src/data pipeline-ingestao
+
+
+docker compose down && UID=$(id -u) GID=$(id -g) docker compose up --build -d
+
+docker compose build --no-cache && AIRFLOW_UID=$(id -u) docker compose up --build -d

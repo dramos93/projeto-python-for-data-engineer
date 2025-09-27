@@ -1,43 +1,71 @@
 import polars as pl
 import polars.selectors as cs
 from datetime import datetime
-class Transform():
+from rich import print
+from time import time
+from src.utils import PolarsProcessor
+
+class Transform(PolarsProcessor):
+    def __init__(self):
+        super().__init__()
+
     def load_data(self):
-        today = datetime.now().today().date()
-        df_raw = pl.read_json(f"data/raw/api/exchange_rates/exchange_rates_{today}.json")
-        conversion_rates_fields = df_raw.schema["conversion_rates"].to_schema().keys()
-        df_raw = df_raw.with_columns(
-            [pl.col("conversion_rates").struct.field(field)
-             for field
-             in conversion_rates_fields]
+        today = datetime.now().date().today()
+        source_path = f"data/raw/api/exchange_rates/exchange_rates_{today}.json"
+
+        # Define as colunas que servirão de identificadores (não serão pivotadas)
+        index_cols = [
+            "result",
+            "documentation",
+            "terms_of_use",
+            "time_last_update_unix",
+            "time_last_update_utc",
+            "time_next_update_unix",
+            "time_next_update_utc",
+            "base_code",
+        ]
+
+        # 1. Inicia uma varredura "lazy" do arquivo JSON com pl.scan_json
+        lazy_df = (
+            pl.read_json(source_path).lazy()
+            
+            # 2. Desaninha (unnest) a coluna struct "conversion_rates" de forma automática
+            .with_columns(pl.col("conversion_rates").struct.unnest())
+            
+            # 3. Usa unpivot (o substituto de melt) para transformar de formato largo para longo.
+            #    pl.exclude() seleciona todas as colunas EXCETO as de índice,
+            #    sem precisar saber os nomes das moedas de antemão.
+            .unpivot(
+                index=index_cols,
+                on=pl.exclude([*index_cols, "conversion_rates"]), # Adicionado "conversion_rates" para garantir que a coluna original não entre
+                variable_name="code_exchange_rate",
+                value_name="exchange_rate",
             )
+            
+            # 4. Remove a coluna struct original que não é mais necessária
+            # .drop("conversion_rates")
 
-        df_raw = df_raw.melt(
-            id_vars=[
-                "result",
-                "documentation",
-                "terms_of_use",
-                "time_last_update_unix",
-                "time_last_update_utc",
-                "time_next_update_unix",
-                "time_next_update_utc",
-                "base_code",
-            ],
-            value_vars=conversion_rates_fields,
-            variable_name="code",
-            value_name="value"
+            # 5. Filtra valores nulos (se houver)
+            .filter(pl.col("exchange_rate").is_not_null())
         )
-        print(df_raw.filter(df_raw["code"] == "USD"))
-        return df_raw
+        lazy_df = lazy_df.with_columns(pl.lit("api").alias("type_src"))
+        sink_path = f"data/silver/finance/exchange_rates/part-{int(time()*1000)}.parquet"
 
+        self.polars_read_parquet()
+        self.polars_write_parquet()
+
+        lazy_df.sink_parquet(sink_path, compression="snappy", mkdir=True)
 
     def transform_data(self):
         print("Transform Data.")
 
-
     def execute(self):
         self.load_data()
 
+
 if __name__ == "__main__":
+    time_a = time()
+
     tranform_exchange_rates = Transform()
-    tranform_exchange_rates.execute()
+    tranform_exchange_rates.load_data()
+    print(time() - time_a)

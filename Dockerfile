@@ -1,21 +1,34 @@
-# stage 2: imagem de runtime (Python)
-FROM python:3.13-slim-bookworm
+# Use a versão oficial do Airflow como base.
+FROM apache/airflow:2.9.2
 
-# copia o binário uv do stage anterior
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-# RUN chmod +x /usr/local/bin/uv
+# Permaneça como 'root' para instalar dependências do sistema.
+USER root
 
-ADD . /src
+# Instala o uv
+RUN apt-get update && \
+    apt-get install -y curl && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    apt-get purge -y --auto-remove curl && \
+    rm -rf /var/lib/apt/lists/*
 
-# Define o diretório de trabalho dentro do contêiner.
-WORKDIR /src
+# Copie os arquivos de dependência e o código-fonte para o diretório home do Airflow.
+WORKDIR /opt/airflow
+COPY pyproject.toml uv.lock ./
+COPY ./src ./src
+COPY ./config ./config
+COPY .env .env
 
-# instala dependências do SO necessárias (se precisar)
-RUN apt-get update && apt-get install -y curl ca-certificates --no-install-recommends && rm -rf /var/lib/apt/lists/*
+# Mude a propriedade dos arquivos para o usuário 'airflow' para que ele possa usá-los.
+RUN chown -R airflow:root /opt/airflow
 
-# instala uv de forma não-gerenciada em /usr/local/uv
-# RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_UNMANAGED_INSTALL="/usr/local/uv" sh
+# Mude para o usuário 'airflow' ANTES de instalar pacotes Python.
+USER airflow
 
-RUN uv sync --locker
+# Instale as dependências. Sem a flag '--system', uv usará o ambiente
+# virtual do Airflow (/opt/airflow/.venv), que é o correto.
+RUN uv pip install -r pyproject.toml
 
-CMD ["sh"]
+# Configure o PYTHONPATH.
+ENV PYTHONPATH="/opt/airflow/src:${PYTHONPATH}"
+
+# O usuário 'airflow' já está definido para a execução dos contêineres.

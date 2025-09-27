@@ -1,11 +1,100 @@
-version: "3.9"
+# Define um bloco comum para todos os serviços do Airflow para evitar repetição
+x-airflow-common: &airflow-common
+  # Constrói a imagem a partir do Dockerfile no diretório atual
+  build: .
+  # Executa o contêiner com o UID do seu usuário e o GID 0 (root), como exigido pelo Airflow
+  user: "${AIRFLOW_UID:-50000}:0"
+  # Variáveis de ambiente para configurar o Airflow e suas conexões
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/1
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__LOGGING_LEVEL: INFO
+    DATA_DIR: /opt/airflow/data
+  # Mapeia pastas locais para dentro dos contêineres para persistência e desenvolvimento
+  volumes:
+    - ./src/airflow/dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./data:/opt/airflow/data
+    - ./src:/opt/airflow/src
+  # Garante que os serviços do Airflow só iniciem DEPOIS que postgres e redis estiverem saudáveis
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
 services:
-  etl:
-    build: .
-    container_name: etl_pipeline
-    volumes:
-      - ./data:/app/data
-      - ./config:/app/config
+  # Serviço do banco de dados PostgreSQL
+  postgres:
+    image: postgres:16
     environment:
-      - ENV=dev
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow", "-d", "airflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Serviço do broker de mensagens Redis
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Serviço da Interface Web do Airflow
+  airflow-webserver:
+    <<: *airflow-common
+    # Reinicia o contêiner automaticamente se ele falhar
     restart: always
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  # Serviço do Agendador de Tarefas do Airflow
+  airflow-scheduler:
+    <<: *airflow-common
+    # Reinicia o contêiner automaticamente se ele falhar
+    restart: always
+    command: scheduler
+
+  # Serviço do Worker Celery que executa as tarefas
+  airflow-worker:
+    <<: *airflow-common
+    # Reinicia o contêiner automaticamente se ele falhar
+    restart: always
+    command: celery worker
+
+  # Serviço de inicialização que roda apenas uma vez
+  airflow-init:
+    <<: *airflow-common
+    command:
+      - bash
+      - -c
+      - |
+        # Migra o banco de dados para a última versão e cria o usuário admin
+        airflow db migrate
+        airflow users create \
+          --username admin \
+          --password admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com
