@@ -1,11 +1,13 @@
 import polars as pl
-import polars.selectors as cs
+
+# import polars.selectors as cs
 from datetime import datetime
-from rich import print
-from time import time
+
+# from rich import print
+# from time import time
 from src.utils import PolarsProcessor
 import polars_hash as plh
-from typing import List
+# from typing import List
 
 
 class Transform(PolarsProcessor):
@@ -59,7 +61,7 @@ class Transform(PolarsProcessor):
                     .alias("time_next_update_utc")
                 ),
                 pl.col("exchange_rate").cast(pl.Decimal(20, 4)),
-                pl.lit(datetime.now()).alias("date_src"),
+                pl.lit(datetime.now()).alias("load_date_src"),
             )
             .with_columns(
                 self.generate_hash_column(
@@ -78,10 +80,20 @@ class Transform(PolarsProcessor):
     def execute(self):
         today = datetime.now().date().today()
         source_path = f"data/raw/api/exchange_rates/exchange_rates_{today}.json"
-        path_sink = "data/silver/finance/exchange_rates"
-        lazy_df = self.polars_read_json(source_path)
-        silver_df = self.transformations(lazy_df)
-        self.polars_write_parquet(silver_df, path_sink)
+        import os
+
+        paths = os.listdir("data/raw/api/exchange_rates/")
+        for path in paths:
+            path_sink = "data/silver/finance/exchange_rates"
+            lazy_df = self.polars_read_json("data/raw/api/exchange_rates/" + path)
+            # print(lazy_df.select(pl.len()).collect())
+            silver_df = self.transformations(lazy_df)
+            self.polars_write_parquet_append(silver_df, path_sink)
+
+        # path_sink = "data/silver/finance/exchange_rates"
+        # lazy_df = self.polars_read_json(source_path)
+        # # silver_df = self.transformations(lazy_df)
+        # # self.polars_write_parquet_append(silver_df, path_sink)
 
 
 if __name__ == "__main__":

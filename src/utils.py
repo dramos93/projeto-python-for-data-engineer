@@ -35,7 +35,7 @@ class PolarsProcessor:
 
     def polars_read_json(self, path):
         return pl.read_json(path).lazy()
-    
+
     def polars_read_parquet(self, path):
         return pl.scan_parquet(path)
 
@@ -60,10 +60,13 @@ class PolarsProcessor:
             # Se o path_sink não existe, todos os dados são novos.
             return new_lazy_df
 
-    def polars_write_parquet(self, lazy_df, path_sink, key_cols="hash_diff"):
+    def polars_write_parquet_append(self, lazy_df, path_sink, key_cols="hash_diff"):
         lazy_df_to_write = self.polars_filter_new_records(lazy_df, path_sink, key_cols)
         if not lazy_df_to_write.first().collect().is_empty():
             sink_path = f"{path_sink}/part-{int(time() * 1000)}.parquet"
-            lazy_df_to_write.sink_parquet(sink_path, compression="snappy")
+            lazy_df_to_write.sink_parquet(sink_path, compression="snappy", mkdir=True)
         else:
             print("Nenhum registro novo foi encontrado para salvar.")
+
+    def polars_write_parquet_overwrite(self, lazy_df, path_sink):
+        lazy_df.sink_parquet(path_sink, compression="snappy", mkdir=True)
