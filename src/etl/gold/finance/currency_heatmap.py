@@ -108,7 +108,7 @@ class Gold(PolarsProcessor):
             )
         )
         print(df_heatmap_agg.collect_schema())
-        path_sink = "data/gold/finance/heatmap_agg.parquet"
+        path_sink = "data/gold/finance/currency_heatmap.parquet"
         self.polars_write_parquet_overwrite(df_heatmap_agg, path_sink)
 
 
