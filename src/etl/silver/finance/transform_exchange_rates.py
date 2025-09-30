@@ -77,17 +77,13 @@ class Transform(PolarsProcessor):
 
     def execute(self):
         today = datetime.now().date().today()
-        # source_path = f"data/raw/api/exchange_rates/exchange_rates_{today}.json"
-        source_path = f"data/raw/api/exchange_rates/exchange_rates_2025-09-29.json"
+        source_path = f"data/raw/api/exchange_rates/exchange_rates_{today}.json"
         path_sink = "data/silver/finance/exchange_rates"
         lazy_df = self.polars_read_json(source_path)
         silver_df = self.transformations(lazy_df)
         self.polars_write_parquet(silver_df, path_sink)
-        # print(silver_df.collect())
 
 
 if __name__ == "__main__":
-    time_a = time()
     tranform_exchange_rates = Transform()
     tranform_exchange_rates.execute()
-    print(time() - time_a)

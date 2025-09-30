@@ -35,6 +35,9 @@ class PolarsProcessor:
 
     def polars_read_json(self, path):
         return pl.read_json(path).lazy()
+    
+    def polars_read_parquet(self, path):
+        return pl.scan_parquet(path)
 
     def polars_filter_new_records(
         self, new_lazy_df, path_sink, subset_cols="hash_diff"
