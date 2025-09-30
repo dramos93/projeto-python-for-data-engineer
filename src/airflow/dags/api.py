@@ -10,7 +10,6 @@ with DAG(
     catchup=False,
     tags=["projeto"],
 ) as dag:
-
     etapa1 = BashOperator(
         task_id="etapa1",
         bash_command="python src/etl/raw/api/extract_api_exchange_rates.py",
@@ -22,7 +21,6 @@ with DAG(
         bash_command="python src/etl/silver/finance/transform_exchange_rates.py",
         cwd="/opt/airflow",
     )
-
 
     # Orquestração (ordem de execução)
     etapa1 >> etapa2

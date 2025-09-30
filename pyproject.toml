@@ -8,6 +8,7 @@ dependencies = [
     "maturin[patchelf]>=1.9.4",
     "pandas>=2.3.2",
     "polars>=1.33.1",
+    "polars-hash>=0.5.5",
     "psutil>=7.0.0",
     "psycopg2-binary>=2.9.10",
     "pyarrow>=21.0.0",

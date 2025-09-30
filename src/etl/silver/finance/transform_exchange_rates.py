@@ -4,14 +4,13 @@ from datetime import datetime
 from rich import print
 from time import time
 from src.utils import PolarsProcessor
+import polars_hash as plh
+from typing import List
+
 
 class Transform(PolarsProcessor):
     def __init__(self):
         super().__init__()
-
-    def get_table(self, path):
-        lazy_df = pl.read_json(path).lazy()
-        return lazy_df
 
     def transformations(self, lazy_df):
         # Define as colunas que servirão de identificadores (não serão pivotadas)
@@ -29,41 +28,62 @@ class Transform(PolarsProcessor):
         # 1. Inicia uma varredura "lazy" do arquivo JSON com pl.scan_json
         lazy_df = (
             lazy_df
-            
             # 2. Desaninha (unnest) a coluna struct "conversion_rates" de forma automática
             .with_columns(pl.col("conversion_rates").struct.unnest())
-            
             # 3. Usa unpivot (o substituto de melt) para transformar de formato largo para longo.
             #    pl.exclude() seleciona todas as colunas EXCETO as de índice,
             #    sem precisar saber os nomes das moedas de antemão.
             .unpivot(
                 index=index_cols,
-                on=pl.exclude([*index_cols, "conversion_rates"]), # Adicionado "conversion_rates" para garantir que a coluna original não entre
+                on=pl.exclude(
+                    [*index_cols, "conversion_rates"]
+                ),  # Adicionado "conversion_rates" para garantir que a coluna original não entre
                 variable_name="code_exchange_rate",
                 value_name="exchange_rate",
             )
-            
             # 4. Remove a coluna struct original que não é mais necessária
             # .drop("conversion_rates")
-
             # 5. Filtra valores nulos (se houver)
             .filter(pl.col("exchange_rate").is_not_null())
+            .with_columns(
+                pl.lit("api").alias("type_src"),
+                pl.lit("exchangerate-api").alias("system_src"),
+                (
+                    pl.col("time_last_update_utc")
+                    .str.strptime(pl.Datetime, "%a, %d %b %Y %H:%M:%S %z", strict=False)
+                    .alias("time_last_update_utc")
+                ),
+                (
+                    pl.col("time_next_update_utc")
+                    .str.strptime(pl.Datetime, "%a, %d %b %Y %H:%M:%S %z", strict=False)
+                    .alias("time_next_update_utc")
+                ),
+                pl.col("exchange_rate").cast(pl.Decimal(20, 4)),
+                pl.lit(datetime.now()).alias("date_src"),
+            )
+            .with_columns(
+                self.generate_hash_column(
+                    index_cols
+                    + [
+                        "code_exchange_rate",
+                        "exchange_rate",
+                        "type_src",
+                        "system_src",
+                    ]
+                )
+            )
         )
-        lazy_df = lazy_df.with_columns(pl.lit("api").alias("type_src"))
         return lazy_df
-
-    def write_data(self, lazy_df):
-        sink_path = f"data/silver/finance/exchange_rates/part-{int(time()*1000)}.parquet"
-        self.polars_read_parquet()
-        self.polars_write_parquet()
-        lazy_df.sink_parquet(sink_path, compression="snappy", mkdir=True)
 
     def execute(self):
         today = datetime.now().date().today()
-        source_path = f"data/raw/api/exchange_rates/exchange_rates_{today}.json"
-        lazy_df = self.get_table(source_path)
+        # source_path = f"data/raw/api/exchange_rates/exchange_rates_{today}.json"
+        source_path = f"data/raw/api/exchange_rates/exchange_rates_2025-09-29.json"
+        path_sink = "data/silver/finance/exchange_rates"
+        lazy_df = self.polars_read_json(source_path)
         silver_df = self.transformations(lazy_df)
-        self.write_data(silver_df)
+        self.polars_write_parquet(silver_df, path_sink)
+        # print(silver_df.collect())
 
 
 if __name__ == "__main__":

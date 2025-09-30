@@ -9,6 +9,7 @@ import json
 
 load_dotenv()
 
+
 def get_data_from_exchange_rates_api():
     API_KEY = os.getenv("API_KEY")
     if not API_KEY:
