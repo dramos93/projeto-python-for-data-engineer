@@ -80,20 +80,20 @@ class Transform(PolarsProcessor):
     def execute(self):
         today = datetime.now().date().today()
         source_path = f"data/raw/api/exchange_rates/exchange_rates_{today}.json"
-        import os
+        
+        # import os
+        # paths = os.listdir("data/raw/api/exchange_rates/")
+        # for path in paths:
+        #     path_sink = "data/silver/finance/exchange_rates"
+        #     lazy_df = self.polars_read_json("data/raw/api/exchange_rates/" + path)
+        #     # print(lazy_df.select(pl.len()).collect())
+        #     silver_df = self.transformations(lazy_df)
+        #     self.polars_write_parquet_append(silver_df, path_sink)
 
-        paths = os.listdir("data/raw/api/exchange_rates/")
-        for path in paths:
-            path_sink = "data/silver/finance/exchange_rates"
-            lazy_df = self.polars_read_json("data/raw/api/exchange_rates/" + path)
-            # print(lazy_df.select(pl.len()).collect())
-            silver_df = self.transformations(lazy_df)
-            self.polars_write_parquet_append(silver_df, path_sink)
-
-        # path_sink = "data/silver/finance/exchange_rates"
-        # lazy_df = self.polars_read_json(source_path)
-        # # silver_df = self.transformations(lazy_df)
-        # # self.polars_write_parquet_append(silver_df, path_sink)
+        path_sink = "data/silver/finance/exchange_rates"
+        lazy_df = self.polars_read_json(source_path)
+        silver_df = self.transformations(lazy_df)
+        self.polars_write_parquet_append(silver_df, path_sink)
 
 
 if __name__ == "__main__":
