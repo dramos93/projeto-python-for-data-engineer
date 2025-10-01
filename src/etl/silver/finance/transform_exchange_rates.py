@@ -53,11 +53,13 @@ class Transform(PolarsProcessor):
                 (
                     pl.col("time_last_update_utc")
                     .str.strptime(pl.Datetime, "%a, %d %b %Y %H:%M:%S %z", strict=False)
+                    .cast(pl.Datetime)
                     .alias("time_last_update_utc")
                 ),
                 (
                     pl.col("time_next_update_utc")
                     .str.strptime(pl.Datetime, "%a, %d %b %Y %H:%M:%S %z", strict=False)
+                    .cast(pl.Datetime)
                     .alias("time_next_update_utc")
                 ),
                 pl.col("exchange_rate").cast(pl.Decimal(20, 4)),
@@ -80,7 +82,7 @@ class Transform(PolarsProcessor):
     def execute(self):
         today = datetime.now().date().today()
         source_path = f"data/raw/api/exchange_rates/exchange_rates_{today}.json"
-        
+
         # import os
         # paths = os.listdir("data/raw/api/exchange_rates/")
         # for path in paths:

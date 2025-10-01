@@ -32,3 +32,5 @@ RUN uv pip install -r pyproject.toml
 ENV PYTHONPATH="/opt/airflow/src:${PYTHONPATH}"
 
 # O usuário 'airflow' já está definido para a execução dos contêineres.
+
+EXPOSE 8501
